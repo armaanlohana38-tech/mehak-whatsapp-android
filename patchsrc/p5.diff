@@ -1,3 +1,5 @@
+--- a/app/src/main/assets/index.html
++++ b/app/src/main/assets/index.html
 @@ -3174,6 +3379,60 @@
    $("ttsPitch").addEventListener("input", function(){ $("ttsPitchVal").textContent = parseFloat(this.value).toFixed(2); });
  
