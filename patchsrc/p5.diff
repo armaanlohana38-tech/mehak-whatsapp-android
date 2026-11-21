@@ -1,63 +1,77 @@
 --- a/app/src/main/assets/index.html
 +++ b/app/src/main/assets/index.html
-@@ -3174,6 +3379,60 @@
-   $("ttsPitch").addEventListener("input", function(){ $("ttsPitchVal").textContent = parseFloat(this.value).toFixed(2); });
+@@ -2402,3 +2402,51 @@
++    if(e.indexOf("Failed to fetch") !== -1 || e.indexOf("NetworkError") !== -1 || e.indexOf("Load failed") !== -1 || e.indexOf("network") !== -1) return {
++      code:"NET", short:"Network error",
++      title:"Internet nahi mil raha",
++      body:"Internet connection check karo. Agar VPN ya ad-blocker on hai to band karke try karo. OpenRouter tak pahunch nahi ho rahi."
++    };
++    return {
++      code:"UNKNOWN", short:"API error",
++      title:"Kuch galat ho gaya",
++      body:"Error: " + e.slice(0, 220) + "\n\nTry again dabao, ya Settings mein key aur model check karo."
++    };
++  }
++
++  function showErrBanner(info){
++    lastErr = info;
++    $("errBannerTxt").textContent = info.short + " — tap for details";
++    $("errBanner").classList.add("on");
++  }
++  function hideErrBanner(){
++    $("errBanner").classList.remove("on");
++  }
++  function openErrDetail(){
++    if(!lastErr) return;
++    $("errTitle").textContent = lastErr.title;
++    $("errBody").textContent = lastErr.body;
++    $("errModal").classList.add("show");
++  }
++
++  function addRetryChip(){
++    removeRetryChip();
++    var row = document.createElement("div");
++    row.className = "retry-row";
++    row.id = "retryRow";
++    row.innerHTML = '<button class="retry-chip" id="retryChip">' +
++      '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>' +
++      'Try again</button>';
++    messagesEl.appendChild(row);
++    scrollBottom();
++    $("retryChip").addEventListener("click", function(){
++      if(!lastFailed) return;
++      var f = lastFailed;
++      removeRetryChip();
++      hideErrBanner();
++      respondTo(f.msg, contactById(f.contactId));
++    });
++  }
++  function removeRetryChip(){
++    var r = $("retryRow");
++    if(r && r.parentNode) r.parentNode.removeChild(r);
+   }
  
-   $("settingsCancel").addEventListener("click", closeSettings);
-+
-+  /* ---- error banner + detail modal ---- */
-+  $("errBanner").addEventListener("click", function(e){
-+    if(e.target.id === "errBannerX"){ hideErrBanner(); return; }
-+    openErrDetail();
-+  });
-+  $("errClose").addEventListener("click", function(){ $("errModal").classList.remove("show"); });
-+  $("errModal").addEventListener("click", function(e){ if(e.target.id === "errModal") $("errModal").classList.remove("show"); });
-+  $("errSettings").addEventListener("click", function(){
-+    $("errModal").classList.remove("show");
-+    openSettings();
-+  });
-+
-+  /* ---- test connection ---- */
-+  $("testConnBtn").addEventListener("click", async function(){
-+    var btn = this, out = $("testConnMsg");
-+    var key = $("apiKeyField").value.trim();
-+    var model = $("modelField").value.trim() || "google/gemini-2.0-flash-exp:free";
-+    if(!key){ out.style.color = "#e53935"; out.textContent = "Key khali hai — pehle key daalo."; return; }
-+    btn.disabled = true; btn.textContent = "Testing…";
-+    out.style.color = "var(--muted)"; out.textContent = "OpenRouter se baat kar rahe hain…";
-+    try{
-+      var res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-+        method:"POST",
-+        headers:{
-+          "Content-Type":"application/json",
-+          "Authorization":"Bearer " + key,
-+          "HTTP-Referer": location.origin || "https://teamily.ai",
-+          "X-Title":"WhatsApp Clone"
-+        },
-+        body: JSON.stringify({
-+          model: model,
-+          messages:[{ role:"user", content:"Reply with the single word: ok" }],
-+          max_tokens: 8
-+        })
-+      });
-+      if(res.ok){
-+        var d = await res.json();
-+        var c = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
-+        out.style.color = "#00A884";
-+        out.textContent = "✓ Key sahi hai, model jawab de raha hai" + (c ? " (\"" + String(c).trim().slice(0,20) + "\")" : "") + ". Save dabao.";
-+      }else{
-+        var t = ""; try{ t = await res.text(); }catch(e){}
-+        var info = classifyError(new Error("API_" + res.status + ": " + t.slice(0,120)));
-+        out.style.color = "#e53935";
-+        out.textContent = "✗ " + info.title + " — " + info.body;
-+      }
-+    }catch(err){
-+      var info2 = classifyError(err);
-+      out.style.color = "#e53935";
-+      out.textContent = "✗ " + info2.title + " — " + info2.body;
-+    }
-+    btn.disabled = false; btn.textContent = "Test connection";
-+  });
-   $("settingsModal").addEventListener("click", function(e){ if(e.target.id === "settingsModal") closeSettings(); });
-   $("settingsSave").addEventListener("click", function(){
-     db.settings.apiKey = $("apiKeyField").value.trim();
+   async function respondTo(userMsg, contact){
+@@ -2412,7 +2412,7 @@
+ 
+     try{
+       if(!db.settings.apiKey){
+-        await sleep(700);
++        await sleep(500);
+         hideTyping();
+         st.textContent = "online"; st.classList.remove("typing");
+         appendMsg({ id: uid(), from: "them", type: "text", text: "yaar ek min… mujhe settings mein apni API key daalni padegi 🙈 3-dot menu → Settings", time: nowTime(), ts: Date.now() });
+@@ -2414,8 +2414,11 @@
+       if(!db.settings.apiKey){
+         await sleep(700);
+         hideTyping();
+-        st.textContent = "online"; st.classList.remove("typing");
+-        appendMsg({ id: uid(), from: "them", type: "text", text: "yaar ek min… mujhe settings mein apni API key daalni padegi 🙈 3-dot menu → Settings", time: nowTime(), ts: Date.now() });
++        st.textContent = c.isGroup ? (c.members.length + " members") : "online";
++        st.classList.remove("typing");
++        lastFailed = { contactId: c.id, msg: userMsg };
++        showErrBanner(classifyError(new Error("NO_KEY")));
++        addRetryChip();
+         busy = false;
+         return;
+       }
