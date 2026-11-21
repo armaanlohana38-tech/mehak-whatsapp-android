@@ -26,7 +26,7 @@
    /* ================= FORMS ================= */
    .form-card{background:var(--panel);padding:16px;margin-bottom:10px;}
    .form-label{font-size:12.5px;color:var(--wa-green-dark);font-weight:600;margin:0 0 6px;text-transform:uppercase;letter-spacing:.4px;}
-@@ -547,6 +566,11 @@
+@@ -547,6 +547,11 @@
        </button>
      </div>
      <div id="messages"></div>
@@ -38,7 +38,7 @@
      <div class="reply-bar" id="replyBar">
        <div class="rt"><b id="replyName"></b><span id="replyText"></span></div>
        <button class="icon-btn dark" id="replyClose" aria-label="Cancel reply">
-@@ -825,6 +849,10 @@
+@@ -825,6 +825,10 @@
        <input type="range" id="ttsRate" min="0.6" max="1.6" step="0.02" style="width:100%">
        <label for="ttsPitch">Pitch — <span id="ttsPitchVal">1.12</span></label>
        <input type="range" id="ttsPitch" min="0.6" max="1.6" step="0.02" style="width:100%">
@@ -49,22 +49,3 @@
        <div class="modal-actions">
          <button class="btn ghost" id="settingsCancel">Cancel</button>
          <button class="btn" id="settingsSave">Save</button>
-@@ -852,6 +880,18 @@
-     </div>
-   </div>
- 
-+  <!-- ================= API ERROR DETAIL ================= -->
-+  <div class="modal" id="errModal">
-+    <div class="modal-card">
-+      <h3 id="errTitle">API error</h3>
-+      <p class="sub" id="errBody"></p>
-+      <div class="modal-actions">
-+        <button class="btn ghost" id="errClose">Close</button>
-+        <button class="btn" id="errSettings">Open Settings</button>
-+      </div>
-+    </div>
-+  </div>
-+
-   <div class="toast" id="toast"></div>
- 
-   <input type="file" id="fileDp" accept="image/*" style="display:none">
