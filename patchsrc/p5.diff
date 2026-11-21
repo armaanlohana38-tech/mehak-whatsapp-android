@@ -1,0 +1,61 @@
+@@ -3174,6 +3379,60 @@
+   $("ttsPitch").addEventListener("input", function(){ $("ttsPitchVal").textContent = parseFloat(this.value).toFixed(2); });
+ 
+   $("settingsCancel").addEventListener("click", closeSettings);
++
++  /* ---- error banner + detail modal ---- */
++  $("errBanner").addEventListener("click", function(e){
++    if(e.target.id === "errBannerX"){ hideErrBanner(); return; }
++    openErrDetail();
++  });
++  $("errClose").addEventListener("click", function(){ $("errModal").classList.remove("show"); });
++  $("errModal").addEventListener("click", function(e){ if(e.target.id === "errModal") $("errModal").classList.remove("show"); });
++  $("errSettings").addEventListener("click", function(){
++    $("errModal").classList.remove("show");
++    openSettings();
++  });
++
++  /* ---- test connection ---- */
++  $("testConnBtn").addEventListener("click", async function(){
++    var btn = this, out = $("testConnMsg");
++    var key = $("apiKeyField").value.trim();
++    var model = $("modelField").value.trim() || "google/gemini-2.0-flash-exp:free";
++    if(!key){ out.style.color = "#e53935"; out.textContent = "Key khali hai — pehle key daalo."; return; }
++    btn.disabled = true; btn.textContent = "Testing…";
++    out.style.color = "var(--muted)"; out.textContent = "OpenRouter se baat kar rahe hain…";
++    try{
++      var res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
++        method:"POST",
++        headers:{
++          "Content-Type":"application/json",
++          "Authorization":"Bearer " + key,
++          "HTTP-Referer": location.origin || "https://teamily.ai",
++          "X-Title":"WhatsApp Clone"
++        },
++        body: JSON.stringify({
++          model: model,
++          messages:[{ role:"user", content:"Reply with the single word: ok" }],
++          max_tokens: 8
++        })
++      });
++      if(res.ok){
++        var d = await res.json();
++        var c = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
++        out.style.color = "#00A884";
++        out.textContent = "✓ Key sahi hai, model jawab de raha hai" + (c ? " (\"" + String(c).trim().slice(0,20) + "\")" : "") + ". Save dabao.";
++      }else{
++        var t = ""; try{ t = await res.text(); }catch(e){}
++        var info = classifyError(new Error("API_" + res.status + ": " + t.slice(0,120)));
++        out.style.color = "#e53935";
++        out.textContent = "✗ " + info.title + " — " + info.body;
++      }
++    }catch(err){
++      var info2 = classifyError(err);
++      out.style.color = "#e53935";
++      out.textContent = "✗ " + info2.title + " — " + info2.body;
++    }
++    btn.disabled = false; btn.textContent = "Test connection";
++  });
+   $("settingsModal").addEventListener("click", function(e){ if(e.target.id === "settingsModal") closeSettings(); });
+   $("settingsSave").addEventListener("click", function(){
+     db.settings.apiKey = $("apiKeyField").value.trim();
