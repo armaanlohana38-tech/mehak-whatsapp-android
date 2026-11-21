@@ -1,0 +1,108 @@
+@@ -1106,7 +1160,38 @@
+     if(raw){
+       try{
+         var d = JSON.parse(raw);
+-        if(d && d.version === 2) return d;
++        if(d && d.version === 4) return d;
++        if(d && d.version === 3){
++          // upgrade: new opening scene ("hi" -> who are you -> I am Mehak ... Sonia)
++          var mc3 = null;
++          for(var j=0;j<d.contacts.length;j++) if(d.contacts[j].id === "mehak") mc3 = d.contacts[j];
++          if(mc3){
++            mc3.situation = MEHAK_SITUATION;
++            var ch3 = d.chats[mc3.id];
++            var isOldOpening = ch3 && ch3.msgs && ch3.msgs.length === 3 &&
++              String(ch3.msgs[0].text).trim() === "I am Mehak your Soniya";
++            if(isOldOpening) ch3.msgs = openingMessages();
++          }
++          d.version = 4;
++          saveDB(d);
++          return d;
++        }
++        if(d && d.version === 2){
++          // upgrade: replace the old single "hi" opening with the wrong-number scene
++          var mc = null;
++          for(var i=0;i<d.contacts.length;i++) if(d.contacts[i].id === "mehak") mc = d.contacts[i];
++          if(mc){
++            if(mc.situation && mc.situation.indexOf("wrong number") === -1) mc.situation = MEHAK_SITUATION;
++            var ch = d.chats[mc.id];
++            if(ch && ch.msgs && ch.msgs.length === 1 && ch.msgs[0].from === "them" && String(ch.msgs[0].text).trim() === "hi"){
++              ch.msgs = openingMessages();
++            }
++          }
++          if(d.me && d.me.name === "You") d.me.name = "Anish Arman";
++          d.version = 4;
++          saveDB(d);
++          return d;
++        }
+       }catch(e){}
+     }
+     var mig = migrateOld();
+@@ -1858,6 +1943,8 @@
+     save();
+     replyTo = null;
+     $("replyBar").classList.remove("on");
++    hideErrBanner();
++    removeRetryChip();
+     paintChatHeader();
+     paintChatWallpaper();
+     renderMessages();
+@@ -2057,6 +2144,14 @@
+   }
+ 
+   var speaking = false;
++  /* TTS pronounces the English word "hi" as /haɪ/ ("high").
++     For speech only, swap a standalone "hi" for "hai" so it sounds like a
++     greeting. The chat text itself is never touched. */
++  function speechText(s){
++    return String(s == null ? "" : s).replace(/(^|[^A-Za-z])hi(?![A-Za-z])/gi, function(m, pre){
++      return pre + "hai";
++    });
++  }
+   function speak(text, onDone){
+     if(!db.settings.voiceOn || !("speechSynthesis" in window)){
+       if(onDone) onDone();
+@@ -2064,7 +2159,7 @@
+     }
+     try{
+       window.speechSynthesis.cancel();
+-      var u = new SpeechSynthesisUtterance(String(text || ""));
++      var u = new SpeechSynthesisUtterance(speechText(text));
+       var v = pickVoice();
+       if(v){ u.voice = v; u.lang = v.lang; }
+       else { u.lang = "hi-IN"; }
+@@ -2300,11 +2395,13 @@
+       if(m && !m.blocked) pool.push(m);
+     }
+     if(!pool.length) return [];
+-    // 1 member -> 1 reply; 2 -> 2; 3+ -> 2-3 replies (people talk over each other)
++    // 1 member -> 1 reply; 2 -> 2; 3 -> 3; 4 -> 3-4; 5+ -> 3-5 (people talk over each other)
+     var want;
+     if(pool.length === 1) want = 1;
+     else if(pool.length === 2) want = 2;
+-    else want = 2 + (Math.random() < 0.55 ? 1 : 0);
++    else if(pool.length === 3) want = 3;
++    else if(pool.length === 4) want = 3 + (Math.random() < 0.5 ? 1 : 0);
++    else want = 3 + Math.floor(Math.random() * 3);
+     if(want > pool.length) want = pool.length;
+ 
+     // shuffle a copy, then take `want`
+@@ -2318,6 +2415,7 @@
+ 
+   async function respondGroup(group, userMsg, st){
+     var responders = pickGroupResponders(group);
++    var groupFailErr = null;
+     if(!responders.length){
+       hideTyping();
+       st.textContent = group.members.length + " members";
+@@ -2357,8 +2455,10 @@
+       try{
+         var raw = await callOpenRouter(msgs, buildMemberPrompt(group, member, others), 300);
+         parsed = parseBubbles(raw);
++        groupFailErr = null;
+       }catch(err){
+         hideTyping();
++        groupFailErr = err;
+         // one member failing shouldn't kill the whole group reply
+         continue;
+       }
