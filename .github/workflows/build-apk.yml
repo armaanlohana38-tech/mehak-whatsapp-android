@@ -40,6 +40,18 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Reassemble web UI asset
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          cat assetsrc/part0.b64 assetsrc/part1.b64 assetsrc/part2.b64 > /tmp/index.b64
+          base64 -d /tmp/index.b64 | gunzip > app/src/main/assets/index.html
+          echo "asset bytes: $(wc -c < app/src/main/assets/index.html)"
+          test -s app/src/main/assets/index.html
+          grep -q 'AndroidSpeech' app/src/main/assets/index.html
+          grep -q 'respondGroup' app/src/main/assets/index.html
+          echo "asset OK"
+
       - name: Prepare Gradle wrapper (best effort)
         continue-on-error: true
         run: |
