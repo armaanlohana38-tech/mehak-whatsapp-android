@@ -40,21 +40,24 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Repair and reassemble web UI asset
+      - name: Fetch web UI asset from the live page
+        env:
+          ASSET_URL: ${{ vars.WEB_ASSET_URL }}
         run: |
           set -euo pipefail
-          python3 tools/repair_assets.py .
           mkdir -p app/src/main/assets
-          cat assetsrc/part0.b64 assetsrc/part1.b64 assetsrc/part2.b64 > /tmp/index.b64
-          base64 -d /tmp/index.b64 > /tmp/index.gz
-          # Fail loudly if the gzip stream is truncated/corrupt instead of
-          # silently producing a partial index.html.
-          gzip -t /tmp/index.gz
-          gunzip -c /tmp/index.gz > app/src/main/assets/index.html
+          if [ -z "${ASSET_URL:-}" ]; then
+            echo "::error::Repository variable WEB_ASSET_URL is not set."
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-delay 2 -o app/src/main/assets/index.html "$ASSET_URL"
           echo "asset bytes: $(wc -c < app/src/main/assets/index.html)"
           test -s app/src/main/assets/index.html
+          # Fail loudly if the fetched page is not the expected app build.
           grep -q 'AndroidSpeech' app/src/main/assets/index.html
           grep -q 'respondGroup' app/src/main/assets/index.html
+          grep -q 'I am Mehak your Soniya' app/src/main/assets/index.html
+          grep -q 'testConnBtn' app/src/main/assets/index.html
           echo "asset OK"
 
       - name: Prepare Gradle wrapper (best effort)
@@ -75,6 +78,22 @@ jobs:
       - name: Build debug APK
         if: always()
         run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK contents
+        if: always()
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          echo "APK size: $(wc -c < $APK) bytes"
+          sha256sum "$ARK"
+          unzip -o built_assets/index.html "$APK" assets/index.html
+          echo "embedded asset bytes: $(wc -c < built_assets/index.html)"
+          sha256sum built_assets/index.html
+          grep -q 'AndroidSpeech' built_assets/index.html
+          grep -q 'I am Mehak your Soniya' built_assets/index.html
+          grep -q 'testConnBtn' built_assets/index.html
+          echo "APK asset verified"
 
       - name: Upload APK artifact
         if: always()
