@@ -1,0 +1,103 @@
+name: Build Mehak WhatsApp APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Prepare Gradle wrapper (best effort)
+        continue-on-error: true
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            gradle wrapper --gradle-version 8.7 --distribution-type bin --no-validate-url || true
+          fi
+          chmod +x ./gradlew 2>/dev/null || true
+
+      - name: Show Gradle version
+        run: gradle --version
+
+      - name: Unit tests
+        id: tests
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build debug APK
+        if: always()
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mehak-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mehak-test-report
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+
+  release:
+    name: Publish APK as a release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download the built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: Mehak-debug-apk
+          path: apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp apk/app-debug.apk Mehak-WhatsApp.apk
+          gh release create "apk-${{ github.run_number }}" Mehak-WhatsApp.apk \
+            --repo "${{ github.repository }}" \
+            --title "Mehak WhatsApp build ${{ github.run_number }}" \
+            --notes "Debug APK built by GitHub Actions. Unit tests passed before this release was created."
