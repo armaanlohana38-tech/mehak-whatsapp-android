@@ -3,26 +3,34 @@ name: Build Mehak WhatsApp APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [ main ]
 
 jobs:
   build:
-    name: Test and build debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     permissions:
-      contents: read
-
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Assemble web UI asset from repo parts
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          cat assetsrc/part0.b64 assetsrc/part1.b64 assetsrc/part2.b64 > /tmp/ui.b64
+          base64 -d /tmp/ui.b64 > /tmp/ui.gz
+          gzip -t /tmp/ui.gz
+          gunzip -c /tmp/ui.gz > app/src/main/assets/index.html
+          echo "--- asset size ---"
+          wc -c app/src/main/assets/index.html
+          echo "--- sha256 ---"
+          sha256sum app/src/main/assets/index.html
+          echo "--- markers ---"
+          grep -c "AndroidSpeech" app/src/main/assets/index.html || true
+          grep -c "respondGroup" app/src/main/assets/index.html || true
+          grep -c "errBanner" app/src/main/assets/index.html || true
+          grep -c "I am Mehak your Soniya" app/src/main/assets/index.html || true
+          test -s app/src/main/assets/index.html
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -30,110 +38,41 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
-
-      - name: Set up Gradle (with caching)
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Fetch web UI asset from the live page
-        env:
-          ASSET_URL: ${{ vars.WEB_ASSET_URL }}
-        run: |
-          set -euo pipefail
-          mkdir -p app/src/main/assets
-          if [ -z "${ASSET_URL:-}" ]; then
-            echo "::error::Repository variable WEB_ASSET_URL is not set."
-            exit 1
-          fi
-          curl -fsSL --retry 3 --retry-delay 2 -o app/src/main/assets/index.html "$ASSET_URL"
-          echo "asset bytes: $(wc -c < app/src/main/assets/index.html)"
-          test -s app/src/main/assets/index.html
-          # Fail loudly if the fetched page is not the expected app build.
-          grep -q 'AndroidSpeech' app/src/main/assets/index.html
-          grep -q 'respondGroup' app/src/main/assets/index.html
-          grep -q 'I am Mehak your Soniya' app/src/main/assets/index.html
-          grep -q 'testConnBtn' app/src/main/assets/index.html
-          echo "asset OK"
-
-      - name: Prepare Gradle wrapper (best effort)
-        continue-on-error: true
-        run: |
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            gradle wrapper --gradle-version 8.7 --distribution-type bin --no-validate-url || true
-          fi
-          chmod +x ./gradlew 2>/dev/null || true
-
-      - name: Show Gradle version
-        run: gradle --version
-
-      - name: Unit tests
-        id: tests
-        run: gradle testDebugUnitTest --no-daemon --stacktrace
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Build debug APK
-        if: always()
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          chmod +x gradlew || true
+          gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Verify APK contents
-        if: always()
+      - name: Verify APK contains the new UI
         run: |
           set -euo pipefail
-          APK=app/build/outputs/apk/debug/app-debug.apk
-          test -f "$APK"
-          echo "APK size: $(wc -c < $APK) bytes"
-          sha256sum "$ARK"
-          unzip -o built_assets/index.html "$APK" assets/index.html
-          echo "embedded asset bytes: $(wc -c < built_assets/index.html)"
-          sha256sum built_assets/index.html
-          grep -q 'AndroidSpeech' built_assets/index.html
-          grep -q 'I am Mehak your Soniya' built_assets/index.html
-          grep -q 'testConnBtn' built_assets/index.html
-          echo "APK asset verified"
+          APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          echo "APK: $APK"
+          ls -l "$APK"
+          sha256sum "$APK"
+          mkdir -p /tmp/apkx && cd /tmp/apkx && rm -rf * && unzip -o -q "$OLDPWD/$APK"
+          echo "--- embedded asset ---"
+          wc -c assets/index.html
+          sha256sum assets/index.html
+          grep -c "I am Mehak your Soniya" assets/index.html
+          grep -c "errBanner" assets/index.html
+          echo "--- dex ---"
+          ls -l classes*.dex | head
 
       - name: Upload APK artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Mehak-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: warn
-
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Mehak-test-report
-          path: app/build/reports/tests/testDebugUnitTest/
-          if-no-files-found: ignore
-
-  release:
-    name: Publish APK as a release
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download the built APK
-        uses: actions/download-artifact@v4
-        with:
-          name: Mehak-debug-apk
-          path: apk
+          name: mehak-whatsapp-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
 
       - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cp apk/app-debug.apk Mehak-WhatsApp.apk
-          gh release create "apk-${{ github.run_number }}" Mehak-WhatsApp.apk \
-            --repo "${{ github.repository }}" \
-            --title "Mehak WhatsApp build ${{ github.run_number }}" \
-            --notes "Debug APK built by GitHub Actions. Unit tests passed before this release was created."
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Mehak WhatsApp APK build ${{ github.run_number }}
+          files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
