@@ -1,3 +1,5 @@
+--- a/app/src/main/assets/index.html
++++ b/app/src/main/assets/index.html
 @@ -2412,10 +2615,13 @@
  
      try{
