@@ -1,6 +1,25 @@
 --- a/app/src/main/assets/index.html
 +++ b/app/src/main/assets/index.html
-@@ -1035,7 +1075,7 @@
+@@ -848,6 +848,18 @@
+       <div class="modal-actions">
+         <button class="btn ghost" id="confirmNo">Cancel</button>
+         <button class="btn danger" id="confirmYes">Confirm</button>
++      </div>
++    </div>
++  </div>
++
++  <!-- ================= API ERROR DETAIL ================= -->
++  <div class="modal" id="errModal">
++    <div class="modal-card">
++      <h3 id="errTitle">API error</h3>
++      <p class="sub" id="errBody"></p>
++      <div class="modal-actions">
++        <button class="btn ghost" id="errClose">Close</button>
++        <button class="btn" id="errSettings">Open Settings</button>
+       </div>
+     </div>
+   </div>
+@@ -1035,7 +1035,7 @@
    function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
  
    var MEHAK_ABOUT = "DU North Campus | Living in a cramped PG far from home. Coffee, late-night assignments, and overthinking. Just looking for one real friend who doesn't judge.";
@@ -9,7 +28,7 @@
    var MEHAK_PERSONA = "a 19-year-old college student living in a PG in Delhi, India";
  
    function defaultContact(){
-@@ -1047,12 +1087,22 @@
+@@ -1047,6 +1047,16 @@
      };
    }
  
@@ -26,31 +45,12 @@
    function freshDB(){
      var c = defaultContact();
      var d = {
+@@ -1050,7 +1050,7 @@
+   function freshDB(){
+     var c = defaultContact();
+     var d = {
 -      version: 2,
 +      version: 4,
        theme: "light",
--      me: { name: "You", about: "Hey there! I am using WhatsApp.", dp: null },
-+      me: { name: "Anish Arman", about: "Hey there! I am using WhatsApp.", dp: null },
+       me: { name: "You", about: "Hey there! I am using WhatsApp.", dp: null },
        settings: {
-         apiKey: "", model: "google/gemini-2.0-flash-exp:free",
-         imgEndpoint: "https://image.pollinations.ai/prompt/",
-@@ -1060,7 +1110,7 @@
-       },
-       contacts: [c], chats: {}, statuses: [], calls: []
-     };
--    d.chats[c.id] = { msgs: [{ id: uid(), from: "them", type: "text", text: "hi", time: nowTime(), ts: Date.now() }], wall: null };
-+    d.chats[c.id] = { msgs: openingMessages(), wall: null };
-     return d;
-   }
- 
-@@ -1096,6 +1146,10 @@
-           ts: Date.now() - (oldMsgs.length - i) * 60000
-         });
-       }
-+      // if the only message is the old "hi", swap in the wrong-number opening
-+      if(msgs.length === 1 && msgs[0].from === "them" && String(msgs[0].text).trim() === "hi"){
-+        msgs = openingMessages();
-+      }
-       d.chats[c.id].msgs = msgs;
-     }
-     return d;
