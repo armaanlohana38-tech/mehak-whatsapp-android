@@ -5,6 +5,11 @@ on:
   push:
     branches: [ main ]
 
+env:
+  # The web UI is fetched straight from its published page, so the APK always
+  # embeds exactly what the live link serves. No base64 parts to corrupt.
+  UI_URL: https://static.teamily.ai/sites/d16d74d2-aa64-4fda-9f28-87f5c00f8f62/webpages/mehak-whatsapp-chat_v6/index.html
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,24 +18,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Assemble web UI asset from repo parts
+      - name: Fetch web UI from the live page
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
-          cat assetsrc/part0.b64 assetsrc/part1.b64 assetsrc/part2.b64 > /tmp/ui.b64
-          base64 -d /tmp/ui.b64 > /tmp/ui.gz
-          gzip -t /tmp/ui.gz
-          gunzip -c /tmp/ui.gz > app/src/main/assets/index.html
+          curl -fsSL --retry 3 --retry-delay 2 -o app/src/main/assets/index.html "$UI_URL"
           echo "--- asset size ---"
           wc -c app/src/main/assets/index.html
           echo "--- sha256 ---"
           sha256sum app/src/main/assets/index.html
+          echo "--- sanity: must be a full HTML document ---"
+          head -c 15 app/src/main/assets/index.html | grep -q "<!DOCTYPE html" || { echo "NOT HTML"; exit 1; }
+          tail -c 20 app/src/main/assets/index.html | grep -q "</html>" || { echo "TRUNCATED HTML"; exit 1; }
+          test "$(wc -c < app/src/main/assets/index.html)" -gt 100000 || { echo "TOO SMALL"; exit 1; }
           echo "--- markers ---"
           grep -c "AndroidSpeech" app/src/main/assets/index.html || true
           grep -c "respondGroup" app/src/main/assets/index.html || true
           grep -c "errBanner" app/src/main/assets/index.html || true
-          grep -c "I am Mehak your Soniya" app/src/main/assets/index.html || true
-          test -s app/src/main/assets/index.html
+          grep -c "I am Mehak and you are supposed to be Sonia." app/src/main/assets/index.html || true
+          grep -c "speechText" app/src/main/assets/index.html || true
+          grep -c "sorry, who are you?" app/src/main/assets/index.html || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -53,11 +60,16 @@ jobs:
           echo "APK: $APK"
           ls -l "$APK"
           sha256sum "$APK"
-          mkdir -p /tmp/apkx && cd /tmp/apkx && rm -rf * && unzip -o -q "$OLDPWD/$APK"
+          mkdir -p /tmp/apkx && cd /tmp/apkx && rm -rf ./* && unzip -o -q "$OLDPWD/$APK"
           echo "--- embedded asset ---"
           wc -c assets/index.html
           sha256sum assets/index.html
-          grep -c "I am Mehak your Soniya" assets/index.html
+          echo "--- embedded asset must match the fetched page ---"
+          sha256sum "$OLDPWD/app/src/main/assets/index.html"
+          cmp assets/index.html "$OLDPWD/app/src/main/assets/index.html" && echo "ASSET_MATCHES_SOURCE"
+          grep -c "I am Mehak and you are supposed to be Sonia." assets/index.html
+          grep -c "speechText" assets/index.html
+          grep -c "sorry, who are you?" assets/index.html
           grep -c "errBanner" assets/index.html
           echo "--- dex ---"
           ls -l classes*.dex | head
