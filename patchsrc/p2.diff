@@ -1,3 +1,5 @@
+--- a/app/src/main/assets/index.html
++++ b/app/src/main/assets/index.html
 @@ -1106,7 +1160,38 @@
      if(raw){
        try{
