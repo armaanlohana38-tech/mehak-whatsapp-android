@@ -1,0 +1,44 @@
+@@ -2412,10 +2615,13 @@
+ 
+     try{
+       if(!db.settings.apiKey){
+-        await sleep(700);
++        await sleep(500);
+         hideTyping();
+-        st.textContent = "online"; st.classList.remove("typing");
+-        appendMsg({ id: uid(), from: "them", type: "text", text: "yaar ek min… mujhe settings mein apni API key daalni padegi 🙈 3-dot menu → Settings", time: nowTime(), ts: Date.now() });
++        st.textContent = c.isGroup ? (c.members.length + " members") : "online";
++        st.classList.remove("typing");
++        lastFailed = { contactId: c.id, msg: userMsg };
++        showErrBanner(classifyError(new Error("NO_KEY")));
++        addRetryChip();
+         busy = false;
+         return;
+       }
+@@ -2473,6 +2679,9 @@
+ 
+       st.textContent = c.isGroup ? (c.members.length + " members") : "online";
+       st.classList.remove("typing");
++      hideErrBanner();
++      removeRetryChip();
++      lastFailed = null;
+ 
+       if(db.settings.voiceOn && parsed.bubbles.length){
+         speak(parsed.bubbles.join(" "));
+@@ -2482,13 +2691,9 @@
+       hideTyping();
+       st.textContent = c.isGroup ? (c.members.length + " members") : "online";
+       st.classList.remove("typing");
+-      var msg = "yaar network issue lag raha hai 😕";
+-      var e = String(err && err.message || err);
+-      if(e.indexOf("NO_KEY") !== -1) msg = "settings mein API key daalo na yaar 🙏";
+-      else if(e.indexOf("API_401") !== -1) msg = "key galat lag rahi hai — Settings mein check karo";
+-      else if(e.indexOf("API_402") !== -1) msg = "us model ke credits khatam hain, doosra model try karo";
+-      else if(e.indexOf("API_429") !== -1) msg = "thoda ruk jao yaar, bahut fast ho 😅";
+-      appendMsg({ id: uid(), from: "them", type: "text", text: msg, time: nowTime(), ts: Date.now() });
++      lastFailed = { contactId: c.id, msg: userMsg };
++      showErrBanner(classifyError(err));
++      addRetryChip();
+     }
+ 
+     busy = false;
