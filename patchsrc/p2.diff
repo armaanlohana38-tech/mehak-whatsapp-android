@@ -1,6 +1,35 @@
 --- a/app/src/main/assets/index.html
 +++ b/app/src/main/assets/index.html
-@@ -1106,7 +1160,38 @@
+@@ -1052,7 +1052,7 @@
+     var d = {
+       version: 2,
+       theme: "light",
+-      me: { name: "You", about: "Hey there! I am using WhatsApp.", dp: null },
++      me: { name: "Anish Arman", about: "Hey there! I am using WhatsApp.", dp: null },
+       settings: {
+         apiKey: "", model: "google/gemini-2.0-flash-exp:free",
+         imgEndpoint: "https://image.pollinations.ai/prompt/",
+@@ -1060,7 +1060,7 @@
+       },
+       contacts: [c], chats: {}, statuses: [], calls: []
+     };
+-    d.chats[c.id] = { msgs: [{ id: uid(), from: "them", type: "text", text: "hi", time: nowTime(), ts: Date.now() }], wall: null };
++    d.chats[c.id] = { msgs: openingMessages(), wall: null };
+     return d;
+   }
+ 
+@@ -1096,6 +1096,10 @@
+           ts: Date.now() - (oldMsgs.length - i) * 60000
+         });
+       }
++      // if the only message is the old "hi", swap in the wrong-number opening
++      if(msgs.length === 1 && msgs[0].from === "them" && String(msgs[0].text).trim() === "hi"){
++        msgs = openingMessages();
++      }
+       d.chats[c.id].msgs = msgs;
+     }
+     return d;
+@@ -1106,7 +1106,38 @@
      if(raw){
        try{
          var d = JSON.parse(raw);
@@ -40,7 +69,7 @@
        }catch(e){}
      }
      var mig = migrateOld();
-@@ -1858,6 +1943,8 @@
+@@ -1858,6 +1858,8 @@
      save();
      replyTo = null;
      $("replyBar").classList.remove("on");
@@ -49,62 +78,3 @@
      paintChatHeader();
      paintChatWallpaper();
      renderMessages();
-@@ -2057,6 +2144,14 @@
-   }
- 
-   var speaking = false;
-+  /* TTS pronounces the English word "hi" as /haɪ/ ("high").
-+     For speech only, swap a standalone "hi" for "hai" so it sounds like a
-+     greeting. The chat text itself is never touched. */
-+  function speechText(s){
-+    return String(s == null ? "" : s).replace(/(^|[^A-Za-z])hi(?![A-Za-z])/gi, function(m, pre){
-+      return pre + "hai";
-+    });
-+  }
-   function speak(text, onDone){
-     if(!db.settings.voiceOn || !("speechSynthesis" in window)){
-       if(onDone) onDone();
-@@ -2064,7 +2159,7 @@
-     }
-     try{
-       window.speechSynthesis.cancel();
--      var u = new SpeechSynthesisUtterance(String(text || ""));
-+      var u = new SpeechSynthesisUtterance(speechText(text));
-       var v = pickVoice();
-       if(v){ u.voice = v; u.lang = v.lang; }
-       else { u.lang = "hi-IN"; }
-@@ -2300,11 +2395,13 @@
-       if(m && !m.blocked) pool.push(m);
-     }
-     if(!pool.length) return [];
--    // 1 member -> 1 reply; 2 -> 2; 3+ -> 2-3 replies (people talk over each other)
-+    // 1 member -> 1 reply; 2 -> 2; 3 -> 3; 4 -> 3-4; 5+ -> 3-5 (people talk over each other)
-     var want;
-     if(pool.length === 1) want = 1;
-     else if(pool.length === 2) want = 2;
--    else want = 2 + (Math.random() < 0.55 ? 1 : 0);
-+    else if(pool.length === 3) want = 3;
-+    else if(pool.length === 4) want = 3 + (Math.random() < 0.5 ? 1 : 0);
-+    else want = 3 + Math.floor(Math.random() * 3);
-     if(want > pool.length) want = pool.length;
- 
-     // shuffle a copy, then take `want`
-@@ -2318,6 +2415,7 @@
- 
-   async function respondGroup(group, userMsg, st){
-     var responders = pickGroupResponders(group);
-+    var groupFailErr = null;
-     if(!responders.length){
-       hideTyping();
-       st.textContent = group.members.length + " members";
-@@ -2357,8 +2455,10 @@
-       try{
-         var raw = await callOpenRouter(msgs, buildMemberPrompt(group, member, others), 300);
-         parsed = parseBubbles(raw);
-+        groupFailErr = null;
-       }catch(err){
-         hideTyping();
-+        groupFailErr = err;
-         // one member failing shouldn't kill the whole group reply
-         continue;
-       }
