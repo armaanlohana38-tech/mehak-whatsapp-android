@@ -1,46 +1,64 @@
 --- a/app/src/main/assets/index.html
 +++ b/app/src/main/assets/index.html
-@@ -2412,10 +2615,13 @@
+@@ -2399,6 +2399,61 @@
  
-     try{
-       if(!db.settings.apiKey){
--        await sleep(700);
-+        await sleep(500);
-         hideTyping();
--        st.textContent = "online"; st.classList.remove("typing");
--        appendMsg({ id: uid(), from: "them", type: "text", text: "yaar ek min… mujhe settings mein apni API key daalni padegi 🙈 3-dot menu → Settings", time: nowTime(), ts: Date.now() });
-+        st.textContent = c.isGroup ? (c.members.length + " members") : "online";
-+        st.classList.remove("typing");
-+        lastFailed = { contactId: c.id, msg: userMsg };
-+        showErrBanner(classifyError(new Error("NO_KEY")));
-+        addRetryChip();
-         busy = false;
-         return;
-       }
-@@ -2473,6 +2679,9 @@
- 
-       st.textContent = c.isGroup ? (c.members.length + " members") : "online";
-       st.classList.remove("typing");
+     st.textContent = group.members.length + " members";
+     st.classList.remove("typing");
++
++    if(groupFailErr){
++      lastFailed = { contactId: group.id, msg: userMsg };
++      showErrBanner(classifyError(groupFailErr));
++      addRetryChip();
++    }else{
 +      hideErrBanner();
 +      removeRetryChip();
 +      lastFailed = null;
++    }
++  }
++
++  /* ============================================================
++     API ERROR HANDLING
++     ============================================================ */
++  var lastErr = null;
++  var lastFailed = null;   // { contactId, msg }
++
++  function classifyError(err){
++    var e = String((err && err.message) || err || "");
++    if(e.indexOf("NO_KEY") !== -1) return {
++      code:"NO_KEY", short:"API key missing",
++      title:"OpenRouter API key nahi hai",
++      body:"Settings mein apni OpenRouter key daalo. openrouter.ai/keys par free key ban jaati hai. Key sirf aapke browser mein save hoti hai, kahin bheji nahi jaati."
++    };
++    if(e.indexOf("API_401") !== -1) return {
++      code:"401", short:"Invalid API key",
++      title:"API key galat hai (401)",
++      body:"OpenRouter ne key reject kar di. Settings mein key dobara paste karo — shuru mein sk-or-v1- hona chahiye. Agar key rotate/delete ki hai to nayi key daalo."
++    };
++    if(e.indexOf("API_402") !== -1) return {
++      code:"402", short:"Credits khatam",
++      title:"Is model ke credits khatam (402)",
++      body:"Free model ka quota khatam ho gaya. Settings mein model badlo — google/gemini-2.0-flash-exp:free ya openrouter/free try karo."
++    };
++    if(e.indexOf("API_429") !== -1) return {
++      code:"429", short:"Rate limit",
++      title:"Rate limit lag gaya (429)",
++      body:"Bahut jaldi messages bhej diye. 30-60 second ruk kar Try again dabao, ya Settings mein doosra free model choose karo."
++    };
++    if(e.indexOf("API_404") !== -1) return {
++      code:"404", short:"Model nahi mila",
++      title:"Model nahi mila (404)",
++      body:"Settings mein model ka naam galat hai. google/gemini-2.0-flash-exp:free use karo."
++    };
++    if(e.indexOf("API_5") !== -1) return {
++      code:"5xx", short:"Server error",
++      title:"OpenRouter server error",
++      body:"OpenRouter ki taraf se problem hai, aapki key ki galti nahi. Thodi der baad Try again dabao."
++    };
++    if(e.indexOf("EMPTY_REPLY") !== -1) return {
++      code:"EMPTY", short:"Empty reply",
++      title:"Model ne khali jawab diya",
++      body:"Model ne kuch return nahi kiya. Try again dabao, ya Settings mein doosra model choose karo."
++    };
+   }
  
-       if(db.settings.voiceOn && parsed.bubbles.length){
-         speak(parsed.bubbles.join(" "));
-@@ -2482,13 +2691,9 @@
-       hideTyping();
-       st.textContent = c.isGroup ? (c.members.length + " members") : "online";
-       st.classList.remove("typing");
--      var msg = "yaar network issue lag raha hai 😕";
--      var e = String(err && err.message || err);
--      if(e.indexOf("NO_KEY") !== -1) msg = "settings mein API key daalo na yaar 🙏";
--      else if(e.indexOf("API_401") !== -1) msg = "key galat lag rahi hai — Settings mein check karo";
--      else if(e.indexOf("API_402") !== -1) msg = "us model ke credits khatam hain, doosra model try karo";
--      else if(e.indexOf("API_429") !== -1) msg = "thoda ruk jao yaar, bahut fast ho 😅";
--      appendMsg({ id: uid(), from: "them", type: "text", text: msg, time: nowTime(), ts: Date.now() });
-+      lastFailed = { contactId: c.id, msg: userMsg };
-+      showErrBanner(classifyError(err));
-+      addRetryChip();
-     }
- 
-     busy = false;
+   async function respondTo(userMsg, contact){
