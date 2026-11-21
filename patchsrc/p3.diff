@@ -1,0 +1,110 @@
+@@ -2399,6 +2499,109 @@
+ 
+     st.textContent = group.members.length + " members";
+     st.classList.remove("typing");
++
++    if(groupFailErr){
++      lastFailed = { contactId: group.id, msg: userMsg };
++      showErrBanner(classifyError(groupFailErr));
++      addRetryChip();
++    }else{
++      hideErrBanner();
++      removeRetryChip();
++      lastFailed = null;
++    }
++  }
++
++  /* ============================================================
++     API ERROR HANDLING
++     ============================================================ */
++  var lastErr = null;
++  var lastFailed = null;   // { contactId, msg }
++
++  function classifyError(err){
++    var e = String((err && err.message) || err || "");
++    if(e.indexOf("NO_KEY") !== -1) return {
++      code:"NO_KEY", short:"API key missing",
++      title:"OpenRouter API key nahi hai",
++      body:"Settings mein apni OpenRouter key daalo. openrouter.ai/keys par free key ban jaati hai. Key sirf aapke browser mein save hoti hai, kahin bheji nahi jaati."
++    };
++    if(e.indexOf("API_401") !== -1) return {
++      code:"401", short:"Invalid API key",
++      title:"API key galat hai (401)",
++      body:"OpenRouter ne key reject kar di. Settings mein key dobara paste karo — shuru mein sk-or-v1- hona chahiye. Agar key rotate/delete ki hai to nayi key daalo."
++    };
++    if(e.indexOf("API_402") !== -1) return {
++      code:"402", short:"Credits khatam",
++      title:"Is model ke credits khatam (402)",
++      body:"Free model ka quota khatam ho gaya. Settings mein model badlo — google/gemini-2.0-flash-exp:free ya openrouter/free try karo."
++    };
++    if(e.indexOf("API_429") !== -1) return {
++      code:"429", short:"Rate limit",
++      title:"Rate limit lag gaya (429)",
++      body:"Bahut jaldi messages bhej diye. 30-60 second ruk kar Try again dabao, ya Settings mein doosra free model choose karo."
++    };
++    if(e.indexOf("API_404") !== -1) return {
++      code:"404", short:"Model nahi mila",
++      title:"Model nahi mila (404)",
++      body:"Settings mein model ka naam galat hai. google/gemini-2.0-flash-exp:free use karo."
++    };
++    if(e.indexOf("API_5") !== -1) return {
++      code:"5xx", short:"Server error",
++      title:"OpenRouter server error",
++      body:"OpenRouter ki taraf se problem hai, aapki key ki galti nahi. Thodi der baad Try again dabao."
++    };
++    if(e.indexOf("EMPTY_REPLY") !== -1) return {
++      code:"EMPTY", short:"Empty reply",
++      title:"Model ne khali jawab diya",
++      body:"Model ne kuch return nahi kiya. Try again dabao, ya Settings mein doosra model choose karo."
++    };
++    if(e.indexOf("Failed to fetch") !== -1 || e.indexOf("NetworkError") !== -1 || e.indexOf("Load failed") !== -1 || e.indexOf("network") !== -1) return {
++      code:"NET", short:"Network error",
++      title:"Internet nahi mil raha",
++      body:"Internet connection check karo. Agar VPN ya ad-blocker on hai to band karke try karo. OpenRouter tak pahunch nahi ho rahi."
++    };
++    return {
++      code:"UNKNOWN", short:"API error",
++      title:"Kuch galat ho gaya",
++      body:"Error: " + e.slice(0, 220) + "\n\nTry again dabao, ya Settings mein key aur model check karo."
++    };
++  }
++
++  function showErrBanner(info){
++    lastErr = info;
++    $("errBannerTxt").textContent = info.short + " — tap for details";
++    $("errBanner").classList.add("on");
++  }
++  function hideErrBanner(){
++    $("errBanner").classList.remove("on");
++  }
++  function openErrDetail(){
++    if(!lastErr) return;
++    $("errTitle").textContent = lastErr.title;
++    $("errBody").textContent = lastErr.body;
++    $("errModal").classList.add("show");
++  }
++
++  function addRetryChip(){
++    removeRetryChip();
++    var row = document.createElement("div");
++    row.className = "retry-row";
++    row.id = "retryRow";
++    row.innerHTML = '<button class="retry-chip" id="retryChip">' +
++      '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>' +
++      'Try again</button>';
++    messagesEl.appendChild(row);
++    scrollBottom();
++    $("retryChip").addEventListener("click", function(){
++      if(!lastFailed) return;
++      var f = lastFailed;
++      removeRetryChip();
++      hideErrBanner();
++      respondTo(f.msg, contactById(f.contactId));
++    });
++  }
++  function removeRetryChip(){
++    var r = $("retryRow");
++    if(r && r.parentNode) r.parentNode.removeChild(r);
++  }
+ 
+   async function respondTo(userMsg, contact){
