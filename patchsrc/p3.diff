@@ -1,112 +1,70 @@
 --- a/app/src/main/assets/index.html
 +++ b/app/src/main/assets/index.html
-@@ -2399,6 +2499,109 @@
+@@ -2057,6 +2057,14 @@
+   }
  
-     st.textContent = group.members.length + " members";
-     st.classList.remove("typing");
-+
-+    if(groupFailErr){
-+      lastFailed = { contactId: group.id, msg: userMsg };
-+      showErrBanner(classifyError(groupFailErr));
-+      addRetryChip();
-+    }else{
-+      hideErrBanner();
-+      removeRetryChip();
-+      lastFailed = null;
-+    }
-+  }
-+
-+  /* ============================================================
-+     API ERROR HANDLING
-+     ============================================================ */
-+  var lastErr = null;
-+  var lastFailed = null;   // { contactId, msg }
-+
-+  function classifyError(err){
-+    var e = String((err && err.message) || err || "");
-+    if(e.indexOf("NO_KEY") !== -1) return {
-+      code:"NO_KEY", short:"API key missing",
-+      title:"OpenRouter API key nahi hai",
-+      body:"Settings mein apni OpenRouter key daalo. openrouter.ai/keys par free key ban jaati hai. Key sirf aapke browser mein save hoti hai, kahin bheji nahi jaati."
-+    };
-+    if(e.indexOf("API_401") !== -1) return {
-+      code:"401", short:"Invalid API key",
-+      title:"API key galat hai (401)",
-+      body:"OpenRouter ne key reject kar di. Settings mein key dobara paste karo — shuru mein sk-or-v1- hona chahiye. Agar key rotate/delete ki hai to nayi key daalo."
-+    };
-+    if(e.indexOf("API_402") !== -1) return {
-+      code:"402", short:"Credits khatam",
-+      title:"Is model ke credits khatam (402)",
-+      body:"Free model ka quota khatam ho gaya. Settings mein model badlo — google/gemini-2.0-flash-exp:free ya openrouter/free try karo."
-+    };
-+    if(e.indexOf("API_429") !== -1) return {
-+      code:"429", short:"Rate limit",
-+      title:"Rate limit lag gaya (429)",
-+      body:"Bahut jaldi messages bhej diye. 30-60 second ruk kar Try again dabao, ya Settings mein doosra free model choose karo."
-+    };
-+    if(e.indexOf("API_404") !== -1) return {
-+      code:"404", short:"Model nahi mila",
-+      title:"Model nahi mila (404)",
-+      body:"Settings mein model ka naam galat hai. google/gemini-2.0-flash-exp:free use karo."
-+    };
-+    if(e.indexOf("API_5") !== -1) return {
-+      code:"5xx", short:"Server error",
-+      title:"OpenRouter server error",
-+      body:"OpenRouter ki taraf se problem hai, aapki key ki galti nahi. Thodi der baad Try again dabao."
-+    };
-+    if(e.indexOf("EMPTY_REPLY") !== -1) return {
-+      code:"EMPTY", short:"Empty reply",
-+      title:"Model ne khali jawab diya",
-+      body:"Model ne kuch return nahi kiya. Try again dabao, ya Settings mein doosra model choose karo."
-+    };
-+    if(e.indexOf("Failed to fetch") !== -1 || e.indexOf("NetworkError") !== -1 || e.indexOf("Load failed") !== -1 || e.indexOf("network") !== -1) return {
-+      code:"NET", short:"Network error",
-+      title:"Internet nahi mil raha",
-+      body:"Internet connection check karo. Agar VPN ya ad-blocker on hai to band karke try karo. OpenRouter tak pahunch nahi ho rahi."
-+    };
-+    return {
-+      code:"UNKNOWN", short:"API error",
-+      title:"Kuch galat ho gaya",
-+      body:"Error: " + e.slice(0, 220) + "\n\nTry again dabao, ya Settings mein key aur model check karo."
-+    };
-+  }
-+
-+  function showErrBanner(info){
-+    lastErr = info;
-+    $("errBannerTxt").textContent = info.short + " — tap for details";
-+    $("errBanner").classList.add("on");
-+  }
-+  function hideErrBanner(){
-+    $("errBanner").classList.remove("on");
-+  }
-+  function openErrDetail(){
-+    if(!lastErr) return;
-+    $("errTitle").textContent = lastErr.title;
-+    $("errBody").textContent = lastErr.body;
-+    $("errModal").classList.add("show");
-+  }
-+
-+  function addRetryChip(){
-+    removeRetryChip();
-+    var row = document.createElement("div");
-+    row.className = "retry-row";
-+    row.id = "retryRow";
-+    row.innerHTML = '<button class="retry-chip" id="retryChip">' +
-+      '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>' +
-+      'Try again</button>';
-+    messagesEl.appendChild(row);
-+    scrollBottom();
-+    $("retryChip").addEventListener("click", function(){
-+      if(!lastFailed) return;
-+      var f = lastFailed;
-+      removeRetryChip();
-+      hideErrBanner();
-+      respondTo(f.msg, contactById(f.contactId));
+   var speaking = false;
++  /* TTS pronounces the English word "hi" as /haɪ/ ("high").
++     For speech only, swap a standalone "hi" for "hai" so it sounds like a
++     greeting. The chat text itself is never touched. */
++  function speechText(s){
++    return String(s == null ? "" : s).replace(/(^|[^A-Za-z])hi(?![A-Za-z])/gi, function(m, pre){
++      return pre + "hai";
 +    });
 +  }
-+  function removeRetryChip(){
-+    var r = $("retryRow");
-+    if(r && r.parentNode) r.parentNode.removeChild(r);
-+  }
+   function speak(text, onDone){
+     if(!db.settings.voiceOn || !("speechSynthesis" in window)){
+       if(onDone) onDone();
+@@ -2064,7 +2064,7 @@
+     }
+     try{
+       window.speechSynthesis.cancel();
+-      var u = new SpeechSynthesisUtterance(String(text || ""));
++      var u = new SpeechSynthesisUtterance(speechText(text));
+       var v = pickVoice();
+       if(v){ u.voice = v; u.lang = v.lang; }
+       else { u.lang = "hi-IN"; }
+@@ -2300,7 +2300,7 @@
+       if(m && !m.blocked) pool.push(m);
+     }
+     if(!pool.length) return [];
+-    // 1 member -> 1 reply; 2 -> 2; 3+ -> 2-3 replies (people talk over each other)
++    // 1 member -> 1 reply; 2 -> 2; 3 -> 3; 4 -> 3-4; 5+ -> 3-5 (people talk over each other)
+     var want;
+     if(pool.length === 1) want = 1;
+     else if(pool.length === 2) want = 2;
+@@ -2304,7 +2304,9 @@
+     var want;
+     if(pool.length === 1) want = 1;
+     else if(pool.length === 2) want = 2;
+-    else want = 2 + (Math.random() < 0.55 ? 1 : 0);
++    else if(pool.length === 3) want = 3;
++    else if(pool.length === 4) want = 3 + (Math.random() < 0.5 ? 1 : 0);
++    else want = 3 + Math.floor(Math.random() * 3);
+     if(want > pool.length) want = pool.length;
  
-   async function respondTo(userMsg, contact){
+     // shuffle a copy, then take `want`
+@@ -2318,6 +2318,7 @@
+ 
+   async function respondGroup(group, userMsg, st){
+     var responders = pickGroupResponders(group);
++    var groupFailErr = null;
+     if(!responders.length){
+       hideTyping();
+       st.textContent = group.members.length + " members";
+@@ -2357,6 +2357,7 @@
+       try{
+         var raw = await callOpenRouter(msgs, buildMemberPrompt(group, member, others), 300);
+         parsed = parseBubbles(raw);
++        groupFailErr = null;
+       }catch(err){
+         hideTyping();
+         // one member failing shouldn't kill the whole group reply
+@@ -2359,6 +2359,7 @@
+         parsed = parseBubbles(raw);
+       }catch(err){
+         hideTyping();
++        groupFailErr = err;
+         // one member failing shouldn't kill the whole group reply
+         continue;
+       }
