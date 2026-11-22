@@ -6,10 +6,8 @@ on:
     branches: [ main ]
 
 env:
-  # The last known-good APK. Its assets/index.html is the exact base the
-  # patchsrc/*.diff files were generated against (sha256 89013ad3...).
-  BASE_APK_URL: https://github.com/armaanlohana38-tech/mehak-whatsapp-android/releases/download/apk-6/Mehak-WhatsApp.apk
-  BASE_SHA256: 89013ad30c4ef702ab9e6a6efeeba0c91b10c9d1e41cea955d842a56eaf75bd7
+  # sha256 of the exact index.html this build must contain
+  EXPECTED_SHA256: 9c98d68b2abe340291fbab8015ec9ac6242fc948da7254b48c0715b665a682a4
 
 jobs:
   build:
@@ -19,33 +17,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rebuild web UI from base APK + patches
+      - name: Decode web UI asset
         run: |
           set -euo pipefail
-          mkdir -p app/src/main/assets /tmp/base
-          curl -fsSL --retry 3 --retry-delay 2 -o /tmp/base/base.apk "$BASE_APK_URL"
-          ls -l /tmp/base/base.apk
-          cd /tmp/base && unzip -o -q base.apk assets/index.html
-          cd "$GITHUB_WORKSPACE"
-          cp /tmp/base/assets/index.html app/src/main/assets/index.html
-          echo "--- base asset ---"
+          mkdir -p app/src/main/assets
+          cat assetsrc/ui0.b64 assetsrc/ui1.b64 assetsrc/ui2.b64 assetsrc/ui3.b64 > /tmp/ui.gz
+          gzip -t /tmp/ui.gz
+          gunzip -c /tmp/ui.gz > app/src/main/assets/index.html
+          echo "--- asset size ---"
           wc -c app/src/main/assets/index.html
+          echo "--- sha256 ---"
           sha256sum app/src/main/assets/index.html
-          echo "$BASE_SHA256  app/src/main/assets/index.html" | sha256sum -c - || { echo "BASE ASSET MISMATCH"; exit 1; }
-          echo "--- applying patches ---"
-          for p in $(ls patchsrc/p*.diff | sort -V); do
-            echo "  $p"
-            patch -p1 --no-backup-if-mismatch < "$p"
-          done
-          echo "--- patched asset ---"
-          wc -c app/src/main/assets/index.html
-          sha256sum app/src/main/assets/index.html
+          echo "$EXPECTED_SHA256  app/src/main/assets/index.html" | sha256sum -c - || { echo "ASSET SHA MISMATCH"; exit 1; }
           echo "--- sanity ---"
           head -c 15 app/src/main/assets/index.html | grep -q "<!DOCTYPE html" || { echo "NOT HTML"; exit 1; }
-          tail -c 20 app/src/main/assets/index.html | grep -q "</html>" || { echo "TRUNCATED HTML"; exit 1; }
-          test "$(wc -c < app/src/main/assets/index.html)" -gt 150000 || { echo "TOO SMALL"; exit 1; }
+          tail -c 20 app/src/main/assets/index.html | grep -q "</html>" || { echo "TRUNCATED"; exit 1; }
           echo "--- required markers ---"
-          for m in "I am Mehak and you are supposed to be Sonia." "speechText" "sorry, who are you?" "errBanner" "testConnBtn" "respondGroup" "AndroidSpeech"; do
+          for m in "BRAIN_KEY" "appendVoiceNote" "speechText" "errBanner" "testConnBtn" "respondGroup" "AndroidSpeech" "privacy-card" "I am Mehak and you are supposed to be Sonia."; do
             n=$(grep -c "$m" app/src/main/assets/index.html || true)
             echo "  $m -> $n"
             test "$n" -ge 1 || { echo "MISSING: $m"; exit 1; }
@@ -87,10 +75,9 @@ jobs:
           echo "--- embedded asset ---"
           wc -c assets/index.html
           sha256sum assets/index.html
-          echo "--- must match the patched source ---"
-          sha256sum "$OLDPWD/app/src/main/assets/index.html"
+          echo "--- must match the source ---"
           cmp assets/index.html "$OLDPWD/app/src/main/assets/index.html" && echo "ASSET_MATCHES_SOURCE"
-          for m in "I am Mehak and you are supposed to be Sonia." "speechText" "sorry, who are you?" "errBanner" "testConnBtn"; do
+          for m in "BRAIN_KEY" "appendVoiceNote" "speechText" "errBanner" "testConnBtn" "respondGroup" "privacy-card"; do
             n=$(grep -c "$m" assets/index.html || true)
             echo "  $m -> $n"
             test "$n" -ge 1 || { echo "MISSING IN APK: $m"; exit 1; }
